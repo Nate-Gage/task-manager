@@ -1,32 +1,17 @@
 const request = require('supertest')
-const jwt = require('jsonwebtoken')
-const mongoose = require('mongoose')
 const app = require('../src/app')
 const User = require('../src/models/user')
+const { userOne, userOneId, setupDatabase } = require('./fixtures/db')
 
-const userOneId = new mongoose.Types.ObjectId()
-const userOne = {
-    _id: userOneId,
-    name: 'Donkey Kong',
-    email: 'dk@example.com',
-    password: 'donkeykong123',
-    tokens: [{
-        token: jwt.sign({ _id: userOneId }, process.env.JWT_TOKEN)
-    }]
-}
-
-beforeEach(async () => {
-    await User.deleteMany()
-    await new User(userOne).save()
-})
+beforeEach(setupDatabase)
 
 test('Should signup a new user', async () => {
     const response = await request(app)
         .post('/users')
         .send({
-            name: 'Mario',
-            email: 'mario@example.com',
-            password: 'mariokart123'
+            name: 'Tron',
+            email: 'tron@example.com',
+            password: 'tron123!'
         })
         .expect(201)
 
@@ -37,12 +22,12 @@ test('Should signup a new user', async () => {
     //Assertions about the response
     expect(response.body).toMatchObject({
         user: {
-            name: 'Mario',
-            email: 'mario@example.com'
+            name: 'Tron',
+            email: 'tron@example.com'
         },
         token: user.tokens[0].token
     })
-    expect(user.password).not.toBe('wariospassword123')
+    expect(user.password).not.toBe('mariokart123')
 })
 
 test('Should login existing user', async () => {
@@ -97,10 +82,33 @@ test('Should not delete account for unauthenticated user', async () => {
 
 test('Should upload avatar image', async () => {
     await request(app)
-    .post('users/me/avatar')
-    .set('Authorization', `${userOne.tokens[0].token}`)
-    .attach('avatar', 'tests/fixtures/profile-pic.jpg')
-    .expect(200)
+        .post('users/me/avatar')
+        .set('Authorization', `${userOne.tokens[0].token}`)
+        .attach('avatar', 'tests/fixtures/profile-pic.jpg')
+        .expect(200)
     const user = await User.findById(userOneId)
     expect(user.avatar).toEqual(expect.any(Buffer))
+})
+
+test('Should update valid user fields', async () => {
+    await request(app)
+        .patch('users/me')
+        .set('Authorization', `Bearer ${userOne.tokens[0].token}`)
+        .send({
+            name: 'Tron'
+        })
+        .expect(200)
+
+    const user = await User.findById(userOneId)
+    expect(user.name).toEqual('Tron')
+})
+
+test('Should not update invalid user fields', async () => {
+    await request(app)
+        .patch('users/me')
+        .set('Authorization', `Bearer ${userOne.tokens[0].token}`)
+        .send({
+            location: 'Mars'
+        })
+        .expect(400)
 })
